@@ -1,0 +1,376 @@
+---
+title: "TidyOsha"
+author: "Zhenru Han"
+date: "3/13/2017"
+output: pdf_document
+---
+
+#Introduction:
+
+####First of all, my purpose of this project is to prepare the data for analyze that will be used to report on the most dangerous places to work in Massachusetts. I use the data provided by professor and originally pulled from the website of Occupational Safety and Health Administration to help me reach the goal.
+
+###My goal is finding the most dangerous place to work in MA, and I get the brief description from the introduction text of these data as the following:
+
+Osha.dbf - main table with company name, address, date of inspection, etc. 
+		If you get the entire country, there's a number after the 
+		word OSHA, since it's too big to put on one CD.
+Viol.dbf - violations from each inspection. If you get the entire 
+		country, there's a number after the word VIOL, since it's 
+		too big to put on one CD.
+Accid.dbf - details about accident victims
+Hazsub.dbf - hazardous substances involved
+Debt.dbf - status of debt
+History.dbf - outlines a history of any changes in penalty
+Admpay.dbf - a record of collecting administrative fees or penalties
+Prog.dbf - special programs the inspection might be involved in
+Relact.dbf - whether the inspection is related to another inspection or other action
+Optinfo.dbf - optional information
+
+####Here I discovered that only some of the datasets are useful for reaching my goal.
+####I only need to consider data Osha, Accid and Hazsub. I need to put these data together and clean and tidy them.
+
+####Therefore, I separated my project to two steps. The first step is cleaning and tidying the datasets I selected. I need to create a new dataset that combine all useful information from all there datasets (select useful columns and join them together). The Second part is plotting my overall perspective to this data and how I possibly use the data to find the most dangerous place to work in MA.  This is the most important part in my project.
+
+###Step 1
+First, clean data "Accident"
+```{r}
+
+###################### Clean Data "Accident" #########################
+
+library(foreign)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(magrittr)
+library(data.table)
+library(scales)
+library(ggplot2)
+library(base)
+
+# Read data
+accid <- read.dbf("ACCID.dbf")
+nrow(accid)
+ncol(accid)
+acc_1 <- read.dbf("lookups/acc.dbf")
+occ_1 <- read.dbf("lookups/occ.dbf")
+hzs_1 <- read.dbf("lookups/hzs.dbf")
+
+###############################################
+
+#First, check if there's any NA columns in accident
+indi = rep(0, ncol(accid))
+for(i in 1:ncol(accid)){indi[i] = sum(!is.na(accid[,i]))}
+indi #those columns that retrun 0 are null columns and could be removed, none of them can be removed
+#Then remove the duplicate rows
+b <- colnames(accid[1:ncol(accid)])  
+
+a <- data.table(accid, key= b)
+accid <- subset(accid,!duplicated(a))
+
+#Second, check if the column "SITESTATE" all "MA"
+
+if(sum(accid$SITESTATE=="MA") == dim(accid)[1]){accid %<>% select(-SITESTATE)}
+dim(acc_1)
+
+#Third, change all numbers in columns "NATURE","BODYPART","ENVIRON","SOURCE","EVENT" and "HUMAN" into names according to data frame "acc_1"
+# 1 "BODYPART"
+sum(acc_1$CATEGORY=="PART-BODY")
+parts_1 <- acc_1[(acc_1$CATEGORY== "PART-BODY"),]
+dim(parts_1)
+
+parts_1 <- select(parts_1, CODE, VALUE)
+head(parts_1)
+
+colnames(parts_1) <- c("BODYPART", "BODYPART_1")
+str(parts_1)
+tidyaccid_1 <- left_join(accid, parts_1, by="BODYPART")
+tidyaccid_1$BODYPART = NULL
+
+#2 ENIVIROMENT
+sum(acc_1$CATEGORY=="ENVIR-FAC")
+parts_2 <- acc_1[(acc_1$CATEGORY == "ENVIR-FAC"),]
+dim(parts_2)
+
+parts_2 <- select(parts_2, CODE, VALUE)
+head(parts_2)
+
+colnames(parts_2) <- c("ENVIRON", "ENVIRON_1")
+str(parts_2)
+tidyaccid_2 <- left_join(tidyaccid_1, parts_2, by="ENVIRON")
+tidyaccid_2$ENVIRON = NULL
+
+#3 EVENT
+sum(acc_1$CATEGORY=="EVENT-TYP")
+parts_3 <- acc_1[(acc_1$CATEGORY == "EVENT-TYP"),]
+dim(parts_3)
+
+parts_3 <- select(parts_3, CODE, VALUE)
+head(parts_3)
+
+colnames(parts_3) <- c("EVENT", "EVENT_1")
+str(parts_3)
+tidyaccid_3 <- left_join(tidyaccid_2, parts_3, by="EVENT")
+tidyaccid_3$EVENT = NULL
+
+#4 HUMAN
+sum(acc_1$CATEGORY=="HUMAN-FAC")
+parts_4 <- acc_1[(acc_1$CATEGORY == "HUMAN-FAC"),]
+dim(parts_4)
+
+parts_4 <- select(parts_4, CODE, VALUE)
+head(parts_4)
+
+colnames(parts_4) <- c("HUMAN", "HUMAN_1")
+str(parts_4)
+tidyaccid_4 <- left_join(tidyaccid_3, parts_4, by="HUMAN")
+tidyaccid_4$HUMAN = NULL
+
+#5 NATURE
+sum(acc_1$CATEGORY=="NATUR-INJ")
+parts_5 <- acc_1[(acc_1$CATEGORY == "NATUR-INJ"),]
+dim(parts_5)
+
+parts_5 <- select(parts_5, CODE, VALUE)
+head(parts_5)
+
+colnames(parts_5) <- c("NATURE", "NATURE_1")
+str(parts_5)
+tidyaccid_5 <- left_join(tidyaccid_4, parts_5, by="NATURE")
+tidyaccid_5$NATURE = NULL
+
+#6 SOURCE
+sum(acc_1$CATEGORY=="SOURC-INJ")
+parts_6 <- acc_1[(acc_1$CATEGORY == "SOURC-INJ"),]
+dim(parts_6)
+
+parts_6 <- select(parts_6, CODE, VALUE)
+head(parts_6)
+
+colnames(parts_6) <- c("SOURCE", "SOURCE_1")
+str(parts_6)
+tidyaccid_6 <- left_join(tidyaccid_5, parts_6, by="SOURCE")
+tidyaccid_6$SOURCE = NULL
+
+#Fourth, change numbers in column "OCC_CODE" in to names according to data frame occ_1
+
+parts_7 <- occ_1[(occ_1$CODE),]
+dim(parts_7)
+colnames(parts_7) <- c("OCC_CODE", "OCCUPATION")
+str(parts_7)
+tidyaccid_7 <- left_join(tidyaccid_6, parts_7, by="OCC_CODE")
+tidyaccid_7$OCC_CODE = NULL
+
+#Fifth, change numbers in column "HAZSUB" in to names according to data frame hzs_1
+
+parts_8 <- hzs_1[(hzs_1$CODE),]
+dim(parts_8)
+colnames(parts_8) <- c("HAZSUB", "HAZSUB_1")
+str(parts_8)
+tidyaccid_8 <- left_join(tidyaccid_7, parts_8, by="HAZSUB")
+tidyaccid_8$HAZSUB = NULL
+
+###############################################################
+#Above we get the first tidy data of accidents happened in MA
+#We could roughly take a look at this data, do some analysis and see which columns are not useful for finding "The most dangerous place to work in MA" and remove them
+
+#First, we could take a look at the sex ratio of victims
+sexplot <- ggplot(tidyaccid_8, aes(x = tidyaccid_8$SEX)) + geom_bar(aes(fill = ..count..))
+sexplot + ggtitle("Sex ratio of victims recorded")
+sexplot
+#Clearly, we see that most of the victims that have their gender being recorded are males.
+#And also, the gender has no influence on finding the "dangerous place", so we can remove SEX column
+tidyaccid_9 <- tidyaccid_8
+tidyaccid_9$SEX = NULL
+#Similarly, the names and ages of victims are also not useful, remove it
+tidyaccid_9$NAME = NULL
+tidyaccid_9$AGE = NULL
+
+#Second, we could take a look at the bodypart vitims get injured and which part will cause the most severe degree of damage (fatality)
+injurybodypart <- data.frame(subset(tidyaccid_9, tidyaccid_9$DEGREE ==1))
+injurybodyplot <- ggplot(injurybodypart, aes(x=injurybodypart$DEGREE, y=injurybodypart$BODYPART_1)) + ggtitle("Bodypart injured that casued fatality")
+injurybodyplot + geom_jitter(aes(x=injurybodypart$DEGREE, y=injurybodypart$BODYPART_1, colour = "blue")) #Use geom_jitter because two variables are both discrete
+#We can clearly see that the victims who get injured in multiple places, head, chest and body system recieve the most severe degree of damage.
+
+#Third, we can try to find the relationship between injury degree and the source
+
+injurysource1 <- data.frame(subset(tidyaccid_9, tidyaccid_9$DEGREE ==1))
+injurysource2 <- data.frame(subset(tidyaccid_9, tidyaccid_9$DEGREE ==2))
+injurysource3 <- data.frame(subset(tidyaccid_9, tidyaccid_9$DEGREE ==3))
+
+injurysourceplot1 <- ggplot(injurysource1,aes(x=injurysource1$SOURCE_1,y=injurysource1$DEGREE)) + coord_flip()
+injurysourceplot1 +geom_bar(stat ="identity", fill = "red") + ggtitle("Injury source that cause fatality") #It shows that the reason "Other" and "Work surface" cause the most number of fatality
+
+injurysourceplot2 <- ggplot(injurysource2,aes(x=injurysource2$SOURCE_1,y=injurysource2$DEGREE)) + coord_flip()
+injurysourceplot2 +geom_bar(stat ="identity", fill = "blue") + ggtitle("Injury source that cause hospitalized injury") #It shows that the reason "Work surface" causes the most number of hospitalized injury.
+
+injurysourceplot3 <- ggplot(injurysource3,aes(x=injurysource3$SOURCE_1,y=injurysource3$DEGREE)) + coord_flip()
+injurysourceplot3 +geom_bar(stat ="identity", fill = "green") + ggtitle("Injury source that cause non-hospitalized injury")#It shows that the reason "Chem liquids/vapor"  causes the most number of non-hospitalized injury.
+
+#We can clearly see the difference between these three plots.
+
+#Also I find out that there are some rows that have "0" degree of injury and those observations are useless. We can remove them.
+
+tidyaccid <- data.frame(subset(tidyaccid_9, tidyaccid_9$DEGREE !=0))
+#This tidyaccid is the final cleaned accid data I get.
+
+```
+
+Second, we take a look at data "Hazsub". We discovered that in this data, the useful column "HAZSUB1" is parially the same as the hazsub column in data table "tidyaccid" we just cleaned. However, this data "hazsub1" is larger, which indicate more activites or places that are hazadous and not yet cause any injury.
+
+```{r}
+
+###################### Clean Data "Hazsub" #########################
+
+library(foreign)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(magrittr)
+library(data.table)
+library(scales)
+
+# Read data
+
+hazsub <- read.dbf("hazsub.dbf")
+
+
+#remove duplicate rows
+bh <- colnames(hazsub[1:ncol(hazsub)])  
+ah <- data.table(hazsub, key= bh)
+hazsub <- subset(hazsub,!duplicated(ah))
+
+# ACCORDING to the OSHA graph I uploaded to github, we only need to keep the columns ACRIVITYNO and HAZSUB1 (which relate to OSHA and hzs_1)
+
+tidyhazsub_1 <- data.frame(hazsub$ACTIVITYNO, hazsub$HAZSUB1)
+colnames(tidyhazsub_1) <- c("ACTIVITYNO","HAZSUB1")
+                           
+#Change the code in column HAZSUB1 into names according to hzs_1
+
+parts_hzs <- hzs_1[(hzs_1$CODE),]
+dim(parts_hzs)
+colnames(parts_hzs) <- c("HAZSUB1", "HAZSUB_1")
+str(parts_hzs)
+tidyhazsub_2 <- left_join(tidyhazsub_1, parts_hzs, by="HAZSUB1")
+tidyhazsub_2$HAZSUB1 = NULL
+
+#We can get the final cleaned tidyhazsub data now
+tidyhazsub <- tidyhazsub_2
+```
+
+Third, take a look at the most important dataset "Osha."
+
+```{r}
+
+########## This is the part of data OSHA #################
+
+library(foreign)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(magrittr)
+library(data.table)
+library(scales)
+library(ggplot2)
+library(base)
+
+#read the data frame
+osha <- read.dbf("osha.dbf",as.is=FALSE)
+scc_1 <- read.dbf("lookups/scc.dbf")
+
+###############################################
+
+#First, check if there's any NA columns in osha
+indi = rep(0, ncol(osha))
+for(i in 1:ncol(osha)){indi[i] = sum(!is.na(osha[,i]))}
+indi #those columns that retrun 0 are null columns and could be removed, they are column 4 and 9
+#remove STFLAG and CSHO_ID
+osha$STFLAG = NULL
+osha$CSHO_ID = NULL
+
+#################################################
+
+#Second, Check the layout and remove useless columns
+#According to the layout of Osha, we can pull out several useful columns and make a new data table tidyosha_1
+#Choose ACTIVITYNO to help join all other datasets, choose JOBTITLE to see which job is the most dangerous, choose ESTABNAME to see which companies are dangerous, choose SITEADD, SITEZIP, SITESTATE, SITECNTY and SITECITY to find out where the dangerous working places are.
+
+tidyosha_1 <- data.frame(osha$ACTIVITYNO, osha$JOBTITLE, osha$ESTABNAME, osha$SITEADD, osha$SITEZIP, osha$SITECITY, osha$SITECNTY, osha$SITESTATE)
+colnames(tidyosha_1) <- c("ACTIVITYNO","JOBTITLE","ESTABNAME","SITEADD","SITEZIP","SITECITY","SITECNTY", "SITESTATE")
+
+#add one column that combine the code of columns SITECNTY and SITECITY
+tidyosha_1$LOCATIONCODE <- do.call(paste0, tidyosha_1[c("SITESTATE","SITECNTY","SITECITY")])
+
+#Third, we need to change the code in CITECITY and SITECNTY in to names using the dataset scc_1
+
+parts_cty <- data.frame(scc_1$STATE, scc_1$COUNTY, scc_1$CITY, scc_1$NAME)
+dim(parts_cty)
+colnames(parts_cty) <- c("SITESTATE","SITECNTY", "SITECITY", "LOCATION")
+parts_cty$LOCATIONCODE <- do.call(paste0, parts_cty[c("SITESTATE","SITECNTY","SITECITY")])
+str(parts_cty)
+tidyosha_2 <- left_join(tidyosha_1, parts_cty, by="LOCATIONCODE")
+tidyosha_2$SITECNTY.x = NULL
+tidyosha_2$SITECNTY.y = NULL
+tidyosha_2$SITECITY.x = NULL
+tidyosha_2$SITECITY.y = NULL
+tidyosha_2$SITESTATE.x = NULL
+tidyosha_2$SITESTATE.y = NULL
+
+#Join tidyhazsub into tidyosha_1 to get the places that are influenced by hazadous factors
+tidyosha_3 <- right_join(tidyosha_2, tidyhazsub, by="ACTIVITYNO")
+#Join tidyaccid into tidyosha_2 to see which places has caused injury under the hazadous factors.
+tidyosha_4 <- left_join(tidyosha_3, tidyaccid, by="ACTIVITYNO")
+
+#Therefore we can pick tidyosha_3 as the cleaned tidydata (might need some adjustment later)
+tidydata_1 <- tidyosha_4
+```
+
+####Step 2 Basic overview to the tidydata and plotting
+
+```{r}
+
+#As we see, this tidydata shows the places in MA that are under the hazadous condition and some of them even cause the injury to people who work there.
+
+#We can try to discover which county in MA that has the most number of companies that are exposed to hazadous conditions
+
+hazadouscountyplot <- ggplot(tidydata_1,aes(tidydata_1$LOCATION)) + coord_flip()
+hazadouscountyplot +geom_bar() + ggtitle("County in MA that has the most number of companies that are exposed to hazadous conditions")
+#Clearly this plot is way too crowdy and hard to visualize. 
+#We can still find out the top ten county in MA that has the most number of companies that are exposed to hazadous conditions by using the following code:
+toptencountyhazadous <- tail(names(sort(table(tidydata_1$LOCATION))), 10)
+toptencountyhazadous
+
+#However, we could think of narrowing the observations to only the county in MA that has the most number of companies that are exposed to hazadous conditions and cause injury. As our goal is to find the most dangerous place to work, it is reasonable for us to choose only the places that caused injury.
+
+tidydata_2 <- filter(tidydata_1, !is.na(tidydata_1$DEGREE))
+
+injurycountyplot <- ggplot(tidydata_2,aes(tidydata_2$LOCATION)) + coord_flip()
+injurycountyplot +geom_bar(aes(fill = ..count..)) + ggtitle("County in MA that has the most number of companies that are exposed to hazadous conditions and has caused injury")
+#This is a much better plot. We can easily find out that NEW BEDFORD and LYNN are the two places where the most accidents happened. And the accident happened in these two places are extremely high. So we basically can narrow the range of the most dangerous working place to these two counties.
+
+#We can also take a look at what kind of enviornments are New Bedford and Lynn in:
+
+#First, check New Bedford
+#Select the subset that only shows data collected in New Bedford:
+NBenviorn <- filter(tidydata_2, grepl("NEW BEDFORD", tidydata_2$LOCATION))
+nbenviornplot <- ggplot(NBenviorn,aes(NBenviorn$ENVIRON_1)) + coord_flip()
+nbenviornplot +geom_bar(aes(fill = ..count..)) + ggtitle("Hazadous enviornment in New Bedford that cause injury")
+#There are only two conditions : Chemical Action/Reaction Expos and GAS/Vapor/Mist/Fume/Smoke/Dust
+
+#Second, check Lynn
+#Select the subset that only shows data collected in New Bedford:
+LYenviorn <- filter(tidydata_2, grepl("LYNN", tidydata_2$LOCATION))
+lyenviornplot <- ggplot(LYenviorn,aes(LYenviorn$ENVIRON_1)) + coord_flip()
+lyenviornplot +geom_bar(aes(fill = ..count..)) + ggtitle("Hazadous enviornment in Lynn that cause injury")
+#There are only one conditions :GAS/Vapor/Mist/Fume/Smoke/Dust
+#And easily we see that in LYenviorn dataset, there are only the non-hospitalized injury happened; while in NBenviorn dataset, there are fatality, hospitalized injury and non-hospitalized injury. 
+#Simply compare these two places, I think that New Bedford is a more dangerous place to work.
+
+#All my work above is not the final conclusion but only a basic view of the tidydata_1 and tidydata_2 I created for finding dangerous working places.
+
+#The results looks well by using tidydata_2. However, it is too narrow and lack of possibility to do more analysis using other methods (for example, when we want to discover which county in MA has the most number of companies that are exposed to hazadous conditions, we could do ggmap which we haven't learned yet). The tidydata_2 is also pulled out from tidydata_1, so I select tidydata_1 as the preparation for analysis of finding the most dangerous place to work in MA.
+
+tidydata <- tidydata_1 #tidydata is what I get for my result. 
+
+```
+
+####Conclusion: I get the dataset "tidydata" that reaches my goal.
+
